@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { AppSettings, User, DossierProfile, EnhancementType, GlobalAIConfig } from '../types';
-import { Save, UserPlus, Trash2, Settings, FileText, Database, Home, GraduationCap, User as UserIcon, Pencil, X, Quote } from 'lucide-react';
+import { Save, UserPlus, Trash2, Settings, FileText, Database, Home, GraduationCap, User as UserIcon, Pencil, X, Quote, FileSignature } from 'lucide-react';
 import { DossierInput } from './DossierInput';
 
 interface AdminDashboardProps {
@@ -28,6 +28,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newUserUser, setNewUserUser] = useState('');
   const [newUserPass, setNewUserPass] = useState('');
   const [newUserRole, setNewUserRole] = useState<'ADMIN' | 'USER'>('USER');
+  const [newUserAllowAI, setNewUserAllowAI] = useState(true);
 
   const handleSave = () => {
     onUpdateSettings(localSettings);
@@ -69,7 +70,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 username: newUserUser, // ID remains same
                 password: newUserPass,
                 role: newUserRole,
-                name: newUserName
+                name: newUserName,
+                allowAI: newUserAllowAI
             } : u)
         }));
         cancelEdit();
@@ -84,7 +86,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             username: newUserUser, 
             password: newUserPass, 
             role: newUserRole,
-            name: newUserName 
+            name: newUserName,
+            allowAI: newUserAllowAI
         };
 
         setLocalSettings(prev => ({
@@ -101,6 +104,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewUserName(user.name);
       setNewUserPass(user.password);
       setNewUserRole(user.role);
+      setNewUserAllowAI(user.allowAI ?? true); // Default true if undefined
   };
 
   const cancelEdit = () => {
@@ -109,6 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewUserName('');
       setNewUserPass('');
       setNewUserRole('USER');
+      setNewUserAllowAI(true);
   };
 
   const removeUser = (username: string) => {
@@ -225,7 +230,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="space-y-6">
                     <div className="border-b border-slate-100 pb-4 mb-6">
                         <h2 className="text-lg font-bold text-slate-900">AI Personalization</h2>
-                        <p className="text-sm text-slate-500">Customize prompts and system instructions for the two key generative areas.</p>
+                        <p className="text-sm text-slate-500">Customize prompts and system instructions for the generative areas.</p>
                     </div>
 
                     <div className="space-y-8">
@@ -233,7 +238,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
                             <div className="flex items-center gap-2 mb-4 text-orange-700">
                                 <Quote className="w-5 h-5" />
-                                <h3 className="font-bold">Child's Narrative Settings</h3>
+                                <h3 className="font-bold">APR: Child's Narrative</h3>
                             </div>
                             <div className="space-y-4">
                                 <div>
@@ -247,10 +252,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Prompt Template</label>
-                                    <p className="text-xs text-slate-400 mb-2">Use {'{{text}}'} for user input and {'{{context}}'} for child details.</p>
                                     <textarea 
                                     value={localSettings.aiConfig[EnhancementType.CHILD_NARRATIVE].promptTemplate}
                                     onChange={(e) => updateAIConfig(EnhancementType.CHILD_NARRATIVE, 'promptTemplate', e.target.value)}
+                                    className="w-full text-sm border border-slate-300 rounded p-2 h-24 font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                         {/* Case History Narrative Config */}
+                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
+                            <div className="flex items-center gap-2 mb-4 text-blue-700">
+                                <FileSignature className="w-5 h-5" />
+                                <h3 className="font-bold">Case History: Narratives</h3>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">System Instruction (Persona)</label>
+                                    <textarea 
+                                    value={localSettings.aiConfig[EnhancementType.CASE_HISTORY_NARRATIVE]?.systemInstruction || ''}
+                                    onChange={(e) => updateAIConfig(EnhancementType.CASE_HISTORY_NARRATIVE, 'systemInstruction', e.target.value)}
+                                    className="w-full text-sm border border-slate-300 rounded p-2 h-20 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="Instruction for the AI about how to act"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Prompt Template</label>
+                                    <textarea 
+                                    value={localSettings.aiConfig[EnhancementType.CASE_HISTORY_NARRATIVE]?.promptTemplate || ''}
+                                    onChange={(e) => updateAIConfig(EnhancementType.CASE_HISTORY_NARRATIVE, 'promptTemplate', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-24 font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
@@ -261,7 +292,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
                             <div className="flex items-center gap-2 mb-4 text-green-700">
                                 <GraduationCap className="w-5 h-5" />
-                                <h3 className="font-bold">Teacher's Evaluation Settings</h3>
+                                <h3 className="font-bold">APR: Teacher's Evaluation</h3>
                             </div>
                             <div className="space-y-4">
                                 <div>
@@ -350,6 +381,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <option value="ADMIN">Admin</option>
                                 </select>
                             </div>
+                            
+                            <div className="flex items-center pb-2">
+                                <label className="flex items-center cursor-pointer relative">
+                                    <input 
+                                        type="checkbox"
+                                        checked={newUserAllowAI}
+                                        onChange={e => setNewUserAllowAI(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-600"></div>
+                                    <span className="ml-2 text-xs font-medium text-slate-600">Allow AI</span>
+                                </label>
+                            </div>
+
                             <div className="flex gap-2">
                                 {isEditing && (
                                     <button type="button" onClick={cancelEdit} className="bg-slate-500 text-white px-4 py-2 rounded text-sm hover:bg-slate-600">
@@ -371,6 +416,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">User ID</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Role</th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">AI Access</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
@@ -383,6 +429,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
                                                 {user.role}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                            {user.allowAI ? (
+                                                <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs border border-green-200">Enabled</span>
+                                            ) : (
+                                                <span className="text-slate-400 bg-slate-50 px-2 py-0.5 rounded text-xs border border-slate-200">Disabled</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex justify-end gap-3">
                                             <button onClick={() => startEdit(user)} className="text-indigo-600 hover:text-indigo-900">

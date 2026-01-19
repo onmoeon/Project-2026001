@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Sparkles, Loader2, Wand2 } from 'lucide-react';
-import { EnhancementType, PromptSetting } from '../types';
+import { PromptSetting } from '../types';
 import { enhanceText } from '../services/geminiService';
 
 interface DossierInputProps {
@@ -10,8 +11,10 @@ interface DossierInputProps {
   type?: 'text' | 'textarea';
   placeholder?: string;
   enableAI?: boolean;
-  aiConfig?: PromptSetting; // Changed from enum to specific config object
+  aiConfig?: PromptSetting; 
   context?: string; 
+  userCanEnhance?: boolean;
+  apiKey?: string; // New prop
 }
 
 export const DossierInput: React.FC<DossierInputProps> = ({
@@ -22,7 +25,9 @@ export const DossierInput: React.FC<DossierInputProps> = ({
   placeholder,
   enableAI = false,
   aiConfig,
-  context
+  context,
+  userCanEnhance = true,
+  apiKey
 }) => {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,14 +38,18 @@ export const DossierInput: React.FC<DossierInputProps> = ({
         setError("AI Config missing");
         return;
     }
+    if (!apiKey) {
+        setError("API Key not set. Click 'API Key' in top menu.");
+        return;
+    }
     
     setIsEnhancing(true);
     setError(null);
     try {
-      const enhanced = await enhanceText(value, aiConfig, context);
+      const enhanced = await enhanceText(value, aiConfig, context, apiKey);
       onChange(enhanced);
-    } catch (err) {
-      setError("Failed to enhance");
+    } catch (err: any) {
+      setError(err.message || "Failed to enhance");
     } finally {
       setIsEnhancing(false);
     }
@@ -52,7 +61,7 @@ export const DossierInput: React.FC<DossierInputProps> = ({
         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
           {label}
         </label>
-        {enableAI && value.trim().length > 0 && (
+        {enableAI && userCanEnhance && value.trim().length > 0 && (
           <button
             onClick={handleEnhance}
             disabled={isEnhancing}
