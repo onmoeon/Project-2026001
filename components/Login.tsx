@@ -87,11 +87,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
           href="https://onmoaw.github.io/"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-slate-600 hover:text-slate-900 underline"
+          className="text-slate-600 hover:text-slate-900 hover:font-bold underline"
         >
           ONMEON
         </a>
-        . v1.1.2
+        . v1.1.3
       </p>
 
     </div>
