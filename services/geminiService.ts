@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { EnhancementType, PromptSetting } from "../types";
 
@@ -6,18 +7,20 @@ const MODEL_NAME = 'gemini-3-flash-preview';
 export const enhanceText = async (
   text: string, 
   promptSetting: PromptSetting,
-  context: string = ""
+  context: string = "",
+  apiKey?: string
 ): Promise<string> => {
   if (!text) return "";
   
-  // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-     throw new Error("API Key is missing from environment variables (process.env.API_KEY).");
+  // Priority: 1. User provided key (localStorage) 2. Environment Variable
+  const finalApiKey = apiKey || process.env.API_KEY;
+
+  if (!finalApiKey) {
+     throw new Error("API Key is missing. Please set it in the top menu or .env file.");
   }
 
-  // Instantiate client with the environment key
-  const ai = new GoogleGenAI({ apiKey });
+  // Instantiate client with the key
+  const ai = new GoogleGenAI({ apiKey: finalApiKey });
 
   // Replace placeholders in the custom template
   let finalPrompt = promptSetting.promptTemplate
@@ -37,6 +40,6 @@ export const enhanceText = async (
     return response.text?.trim() || text;
   } catch (error) {
     console.error("Gemini API Error:", error);
-    throw new Error("Failed to enhance text. Please check your API Key and connection.");
+    throw new Error("Failed to enhance text. Check your API Key.");
   }
 };

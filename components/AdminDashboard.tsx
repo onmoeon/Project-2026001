@@ -1,27 +1,43 @@
 
-import React, { useState } from 'react';
-import { AppSettings, User, DossierProfile, EnhancementType, GlobalAIConfig } from '../types';
+import React, { useState, useEffect } from 'react';
+import { User, DossierProfile, EnhancementType, GlobalAIConfig, PromptSetting } from '../types';
 import { Save, UserPlus, Trash2, Settings, FileText, Database, Home, GraduationCap, User as UserIcon, Pencil, X, Quote, FileSignature } from 'lucide-react';
 import { DossierInput } from './DossierInput';
 
 interface AdminDashboardProps {
-  settings: AppSettings;
-  onUpdateSettings: (newSettings: AppSettings) => void;
+  defaults: Partial<DossierProfile>;
+  aiConfig: GlobalAIConfig;
+  userList: User[];
+  onSaveDefaults: (defaults: Partial<DossierProfile>) => void;
+  onSaveAI: (type: EnhancementType, setting: PromptSetting) => void;
+  onSaveUser: (user: User) => void;
+  onDeleteUser: (username: string) => void;
   onLogout: () => void;
   onOpenBuilder: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  settings, 
-  onUpdateSettings,
+  defaults,
+  aiConfig,
+  userList,
+  onSaveDefaults,
+  onSaveAI,
+  onSaveUser,
+  onDeleteUser,
   onLogout,
   onOpenBuilder
 }) => {
   const [activeTab, setActiveTab] = useState<'DEFAULTS' | 'AI' | 'USERS'>('DEFAULTS');
   
-  // Local state for editing to allow cancel/save pattern
-  const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+  // Local state for editing fields
+  const [localDefaults, setLocalDefaults] = useState(defaults);
+  const [localAIConfig, setLocalAIConfig] = useState(aiConfig);
   
+  // Update local state when prop changes (e.g. after fetch)
+  useEffect(() => {
+      setLocalAIConfig(aiConfig);
+  }, [aiConfig]);
+
   // User Management State
   const [isEditing, setIsEditing] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -30,72 +46,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newUserRole, setNewUserRole] = useState<'ADMIN' | 'USER'>('USER');
   const [newUserAllowAI, setNewUserAllowAI] = useState(true);
 
-  const handleSave = () => {
-    onUpdateSettings(localSettings);
-    alert('Settings Saved Successfully');
-  };
-
   const updateDefaultField = (field: keyof DossierProfile, value: string) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      defaultDossierValues: {
-        ...prev.defaultDossierValues,
-        [field]: value
-      }
+    setLocalDefaults(prev => ({ ...prev, [field]: value }));
+  };
+
+  const saveDefaults = () => {
+      onSaveDefaults(localDefaults);
+      alert("Defaults saved successfully");
+  };
+
+  const updateAIConfigLocal = (type: EnhancementType, field: 'systemInstruction' | 'promptTemplate', value: string) => {
+    setLocalAIConfig(prev => ({
+        ...prev,
+        [type]: {
+            ...prev[type],
+            [field]: value
+        }
     }));
   };
 
-  const updateAIConfig = (type: EnhancementType, field: 'systemInstruction' | 'promptTemplate', value: string) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      aiConfig: {
-        ...prev.aiConfig,
-        [type]: {
-          ...prev.aiConfig[type],
-          [field]: value
-        }
-      }
-    }));
+  const saveAIConfig = async () => {
+      // Save all keys
+      await onSaveAI(EnhancementType.CHILD_NARRATIVE, localAIConfig[EnhancementType.CHILD_NARRATIVE]);
+      await onSaveAI(EnhancementType.TEACHER_EVALUATION, localAIConfig[EnhancementType.TEACHER_EVALUATION]);
+      await onSaveAI(EnhancementType.CASE_HISTORY_NARRATIVE, localAIConfig[EnhancementType.CASE_HISTORY_NARRATIVE]);
+      alert("AI Configuration saved successfully");
   };
 
   const handleUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if(!newUserUser || !newUserPass || !newUserName) return;
     
-    if (isEditing) {
-        // Update existing user
-        setLocalSettings(prev => ({
-            ...prev,
-            users: prev.users.map(u => u.username === newUserUser ? {
-                username: newUserUser, // ID remains same
-                password: newUserPass,
-                role: newUserRole,
-                name: newUserName,
-                allowAI: newUserAllowAI
-            } : u)
-        }));
-        cancelEdit();
-    } else {
-        // Create new user
-        if (localSettings.users.find(u => u.username === newUserUser)) {
-            alert("Username (UserID) already exists");
-            return;
-        }
-
-        const newUser: User = { 
-            username: newUserUser, 
-            password: newUserPass, 
-            role: newUserRole,
-            name: newUserName,
-            allowAI: newUserAllowAI
-        };
-
-        setLocalSettings(prev => ({
-            ...prev,
-            users: [...prev.users, newUser]
-        }));
-        cancelEdit();
+    // Check duplication for new users
+    if (!isEditing && userList.find(u => u.username === newUserUser)) {
+        alert("Username already exists");
+        return;
     }
+
+    onSaveUser({
+        username: newUserUser,
+        password: newUserPass,
+        name: newUserName,
+        role: newUserRole,
+        allowAI: newUserAllowAI
+    });
+    
+    cancelEdit();
   };
 
   const startEdit = (user: User) => {
@@ -104,7 +100,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewUserName(user.name);
       setNewUserPass(user.password);
       setNewUserRole(user.role);
-      setNewUserAllowAI(user.allowAI ?? true); // Default true if undefined
+      setNewUserAllowAI(user.allowAI ?? true); 
   };
 
   const cancelEdit = () => {
@@ -122,10 +118,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           return;
       }
       if (confirm(`Are you sure you want to delete user ${username}?`)) {
-        setLocalSettings(prev => ({
-            ...prev,
-            users: prev.users.filter(u => u.username !== username)
-        }));
+        onDeleteUser(username);
       }
   };
 
@@ -192,35 +185,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <DossierInput 
                             label="Default School Name" 
-                            value={localSettings.defaultDossierValues.schoolName || ''} 
+                            value={localDefaults.schoolName || ''} 
                             onChange={(v) => updateDefaultField('schoolName', v)}
                         />
                          <DossierInput 
                             label="Default Donor Agency" 
-                            value={localSettings.defaultDossierValues.donorAgency || ''} 
+                            value={localDefaults.donorAgency || ''} 
                             onChange={(v) => updateDefaultField('donorAgency', v)}
                         />
                          <DossierInput 
                             label="Default Academic Year" 
-                            value={localSettings.defaultDossierValues.academicYear || ''} 
+                            value={localDefaults.academicYear || ''} 
                             onChange={(v) => updateDefaultField('academicYear', v)}
                         />
                          <DossierInput 
                             label="Default Sponsorship Category" 
-                            value={localSettings.defaultDossierValues.sponsorshipCategory || ''} 
+                            value={localDefaults.sponsorshipCategory || ''} 
                             onChange={(v) => updateDefaultField('sponsorshipCategory', v)}
                         />
                          <DossierInput 
                             label="Default Prepared By (Fallback)" 
-                            value={localSettings.defaultDossierValues.preparedBy || ''} 
+                            value={localDefaults.preparedBy || ''} 
                             onChange={(v) => updateDefaultField('preparedBy', v)}
                         />
                          <DossierInput 
                             label="Default Date (String)" 
-                            value={localSettings.defaultDossierValues.preparedDate || ''} 
+                            value={localDefaults.preparedDate || ''} 
                             onChange={(v) => updateDefaultField('preparedDate', v)}
                             placeholder="Leave empty for today's date"
                         />
+                    </div>
+                    <div className="flex justify-end">
+                        <button onClick={saveDefaults} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-semibold shadow-md transition-all">
+                            <Save className="w-4 h-4" /> Save Defaults
+                        </button>
                     </div>
                 </div>
             )}
@@ -244,8 +242,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">System Instruction (Persona)</label>
                                     <textarea 
-                                    value={localSettings.aiConfig[EnhancementType.CHILD_NARRATIVE].systemInstruction}
-                                    onChange={(e) => updateAIConfig(EnhancementType.CHILD_NARRATIVE, 'systemInstruction', e.target.value)}
+                                    value={localAIConfig[EnhancementType.CHILD_NARRATIVE].systemInstruction}
+                                    onChange={(e) => updateAIConfigLocal(EnhancementType.CHILD_NARRATIVE, 'systemInstruction', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-20 focus:ring-2 focus:ring-indigo-500 outline-none"
                                     placeholder="Instruction for the AI about how to act"
                                     />
@@ -253,8 +251,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Prompt Template</label>
                                     <textarea 
-                                    value={localSettings.aiConfig[EnhancementType.CHILD_NARRATIVE].promptTemplate}
-                                    onChange={(e) => updateAIConfig(EnhancementType.CHILD_NARRATIVE, 'promptTemplate', e.target.value)}
+                                    value={localAIConfig[EnhancementType.CHILD_NARRATIVE].promptTemplate}
+                                    onChange={(e) => updateAIConfigLocal(EnhancementType.CHILD_NARRATIVE, 'promptTemplate', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-24 font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
@@ -271,8 +269,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">System Instruction (Persona)</label>
                                     <textarea 
-                                    value={localSettings.aiConfig[EnhancementType.CASE_HISTORY_NARRATIVE]?.systemInstruction || ''}
-                                    onChange={(e) => updateAIConfig(EnhancementType.CASE_HISTORY_NARRATIVE, 'systemInstruction', e.target.value)}
+                                    value={localAIConfig[EnhancementType.CASE_HISTORY_NARRATIVE]?.systemInstruction || ''}
+                                    onChange={(e) => updateAIConfigLocal(EnhancementType.CASE_HISTORY_NARRATIVE, 'systemInstruction', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-20 focus:ring-2 focus:ring-indigo-500 outline-none"
                                     placeholder="Instruction for the AI about how to act"
                                     />
@@ -280,8 +278,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Prompt Template</label>
                                     <textarea 
-                                    value={localSettings.aiConfig[EnhancementType.CASE_HISTORY_NARRATIVE]?.promptTemplate || ''}
-                                    onChange={(e) => updateAIConfig(EnhancementType.CASE_HISTORY_NARRATIVE, 'promptTemplate', e.target.value)}
+                                    value={localAIConfig[EnhancementType.CASE_HISTORY_NARRATIVE]?.promptTemplate || ''}
+                                    onChange={(e) => updateAIConfigLocal(EnhancementType.CASE_HISTORY_NARRATIVE, 'promptTemplate', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-24 font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
@@ -298,21 +296,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">System Instruction</label>
                                     <textarea 
-                                    value={localSettings.aiConfig[EnhancementType.TEACHER_EVALUATION].systemInstruction}
-                                    onChange={(e) => updateAIConfig(EnhancementType.TEACHER_EVALUATION, 'systemInstruction', e.target.value)}
+                                    value={localAIConfig[EnhancementType.TEACHER_EVALUATION].systemInstruction}
+                                    onChange={(e) => updateAIConfigLocal(EnhancementType.TEACHER_EVALUATION, 'systemInstruction', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-20 focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Prompt Template</label>
                                     <textarea 
-                                    value={localSettings.aiConfig[EnhancementType.TEACHER_EVALUATION].promptTemplate}
-                                    onChange={(e) => updateAIConfig(EnhancementType.TEACHER_EVALUATION, 'promptTemplate', e.target.value)}
+                                    value={localAIConfig[EnhancementType.TEACHER_EVALUATION].promptTemplate}
+                                    onChange={(e) => updateAIConfigLocal(EnhancementType.TEACHER_EVALUATION, 'promptTemplate', e.target.value)}
                                     className="w-full text-sm border border-slate-300 rounded p-2 h-24 font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div className="flex justify-end">
+                        <button onClick={saveAIConfig} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-semibold shadow-md transition-all">
+                            <Save className="w-4 h-4" /> Save AI Configuration
+                        </button>
                     </div>
                 </div>
             )}
@@ -421,7 +424,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-slate-200">
-                                {localSettings.users.map((user) => (
+                                {userList.map((user) => (
                                     <tr key={user.username}>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.username}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{user.name}</td>
@@ -454,17 +457,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                 </div>
             )}
-            
-            {/* Footer Action Bar */}
-            <div className="mt-8 pt-6 border-t border-slate-200 flex justify-end">
-                <button 
-                    onClick={handleSave}
-                    className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold shadow-md transition-all"
-                >
-                    <Save className="w-4 h-4" />
-                    Save All Changes
-                </button>
-            </div>
         </div>
       </div>
     </div>

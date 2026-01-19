@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Sparkles, Loader2, Wand2 } from 'lucide-react';
 import { PromptSetting } from '../types';
@@ -13,6 +14,7 @@ interface DossierInputProps {
   aiConfig?: PromptSetting; 
   context?: string; 
   userCanEnhance?: boolean;
+  apiKey?: string; // Restored
 }
 
 export const DossierInput: React.FC<DossierInputProps> = ({
@@ -24,7 +26,8 @@ export const DossierInput: React.FC<DossierInputProps> = ({
   enableAI = false,
   aiConfig,
   context,
-  userCanEnhance = true
+  userCanEnhance = true,
+  apiKey
 }) => {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +42,7 @@ export const DossierInput: React.FC<DossierInputProps> = ({
     setIsEnhancing(true);
     setError(null);
     try {
-      const enhanced = await enhanceText(value, aiConfig, context);
+      const enhanced = await enhanceText(value, aiConfig, context, apiKey);
       onChange(enhanced);
     } catch (err: any) {
       setError(err.message || "Failed to enhance");
