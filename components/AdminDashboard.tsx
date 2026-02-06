@@ -225,13 +225,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                     {/* --- AI CONFIG TAB --- */}
                     {activeTab === 'AI' && (
-                        <div className="space-y-6">
+                        <div className="flex flex-col max-h-[80vh]">
+
                             <div className="border-b border-slate-100 pb-4 mb-6">
                                 <h2 className="text-lg font-bold text-slate-900">AI Personalization</h2>
                                 <p className="text-sm text-slate-500">Customize prompts and system instructions for the generative areas.</p>
                             </div>
 
-                            <div className="space-y-8">
+                            <div className="flex-1 overflow-y-auto space-y-8 pr-3 scroll-smooth">
+
+
                                 {/* Child Narrative Config */}
                                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
                                     <div className="flex items-center gap-2 mb-4 text-orange-700">
@@ -312,8 +315,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex justify-end">
-                                <button onClick={saveAIConfig} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-semibold shadow-md transition-all">
+                            <div className="sticky bottom-0 bg-white pt-2 mt-2 border-t border-slate-200 flex justify-end">
+
+                                <button onClick={saveAIConfig} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition-all">
                                     <Save className="w-4 h-4" /> Save AI Configuration
                                 </button>
                             </div>

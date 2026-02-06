@@ -123,7 +123,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
 
 
       <p className="mt-8 text-xs text-slate-400">
-        © {currentYear} {' '} v1.2.2
+        © {currentYear} {' '} v1.2.3
       </p>
 
 
