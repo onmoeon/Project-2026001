@@ -17,17 +17,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-1">
-      <div className="mb-4 text-center">
-        <div className=" w-60 h-40 rounded-xl flex items-center justify-center mx-auto mb-1  ">
-          <img
-            src="https://adra.org.nz/wp-content/uploads/2021/08/ADRA-Horizontal-Logo.png"
-            alt="Logo"
-            className="w-50 brightness-900 contrast-200  opacity-80"
-          />
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="mb-8 text-center">
+        <div className="bg-green-700 w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg rotate-3">
+             <img 
+                src="https://adra.org.nz/wp-content/uploads/2021/08/ADRA-Horizontal-Logo.png" 
+                alt="Logo"
+                className="w-12 brightness-200 contrast-200 grayscale opacity-80" 
+             />
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Internal Report Builder</h1>
-        <p className="text-slate-400 mt-2">Sign in to access the system</p>
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">ADRA Report Builder</h1>
+        <p className="text-slate-500 mt-2">Sign in to access the system</p>
       </div>
 
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
@@ -76,24 +76,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
           </button>
         </form>
       </div>
-
-      {/* <p className="mt-8 text-xs text-slate-400">
-        © 2026 ONMOEON. v1.1.1
-      </p> */}
-
+      
       <p className="mt-8 text-xs text-slate-400">
-        © 2026{" "}
-        <a
-          href="https://onmoaw.github.io/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-slate-600 hover:text-slate-900 hover:font-bold underline"
-        >
-          ONMEON
-        </a>
-        . v1.1.3
+        © 2025 ADRA Bangladesh. Internal Use Only.
       </p>
-
     </div>
   );
 };

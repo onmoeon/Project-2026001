@@ -173,6 +173,16 @@ export interface User {
   allowAI: boolean; // Enhancement Control
 }
 
+export interface SavedReport {
+    id: string;
+    created_by: string;
+    report_type: 'APR' | 'CASE_HISTORY';
+    aid: string;
+    child_name: string;
+    report_data: DossierProfile | CaseHistoryProfile;
+    updated_at: string;
+}
+
 export interface AppSettings {
   aiConfig: GlobalAIConfig;
   defaultDossierValues: Partial<DossierProfile>;

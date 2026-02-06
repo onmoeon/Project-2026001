@@ -12,11 +12,12 @@ import {
     User,
     CaseHistoryProfile,
     INITIAL_CASE_HISTORY,
-    PromptSetting
+    PromptSetting,
+    SavedReport
 } from './types';
 import { generateDossierDocx, generateCaseHistoryDocx } from './services/docxService';
 import { supabase } from './services/supabaseClient';
-import { FileDown, Sprout, LayoutTemplate, User as UserIcon, Quote, GraduationCap, PenTool, LogOut, Loader2, FileText, ClipboardList, Key, X } from 'lucide-react';
+import { FileDown, Sprout, LayoutTemplate, User as UserIcon, Quote, GraduationCap, PenTool, LogOut, Loader2, FileText, ClipboardList, Key, X, Save, FolderOpen, Pencil, Trash2 } from 'lucide-react';
 
 export const App: React.FC = () => {
     // --- State ---
@@ -30,13 +31,20 @@ export const App: React.FC = () => {
     const [loginError, setLoginError] = useState<string>('');
 
     // 3. View/Data State
-    const [view, setView] = useState<'LOGIN' | 'DASHBOARD' | 'BUILDER'>('LOGIN');
+    const [view, setView] = useState<'LOGIN' | 'DASHBOARD' | 'BUILDER' | 'SAVED_REPORTS'>('LOGIN');
     const [reportType, setReportType] = useState<'APR' | 'CASE_HISTORY'>('APR');
+
+    // 4. Form Data
     const [data, setData] = useState<DossierProfile>(INITIAL_DOSSIER);
     const [cspData, setCspData] = useState<CaseHistoryProfile>(INITIAL_CASE_HISTORY);
-    const [isGenerating, setIsGenerating] = useState(false);
 
-    // 4. API Key State (RESTORED)
+    // 5. Saving/Loading State
+    const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+    const [currentReportId, setCurrentReportId] = useState<string | null>(null); // If editing an existing report
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // 6. API Key State
     const [showApiKeyModal, setShowApiKeyModal] = useState(false);
     const [userApiKey, setUserApiKey] = useState<string>(() => localStorage.getItem('adra_user_api_key') || '');
 
@@ -62,16 +70,15 @@ export const App: React.FC = () => {
                 setAiConfig(newConfig);
             }
 
-            // 3. Fetch Users (FIXED MAPPING)
+            // 3. Fetch Users
             const { data: userData } = await supabase.from('app_users').select('*').order('id');
             if (userData) {
-                // Map snake_case from DB to camelCase for Application
                 const mappedUsers: User[] = userData.map((u: any) => ({
                     username: u.username,
                     password: u.password,
                     name: u.name,
                     role: u.role,
-                    allowAI: u.allow_ai // This fixes the "Disabled" issue in Dashboard
+                    allowAI: u.allow_ai
                 }));
                 setUserList(mappedUsers);
             }
@@ -85,6 +92,181 @@ export const App: React.FC = () => {
         fetchAllSettings();
     }, []);
 
+    // --- Session Persistence (24h) ---
+    useEffect(() => {
+        const restoreSession = () => {
+            const storedSession = localStorage.getItem('adra_user_session');
+            if (storedSession) {
+                try {
+                    const { user, expiry } = JSON.parse(storedSession);
+                    // Check if expired
+                    if (new Date().getTime() > expiry) {
+                        localStorage.removeItem('adra_user_session');
+                        return;
+                    }
+
+                    // Restore User
+                    setCurrentUser(user);
+
+                    // Restore correct view
+                    if (user.role === 'ADMIN') {
+                        setView('DASHBOARD');
+                    } else {
+                        setView('SAVED_REPORTS');
+                    }
+                } catch (e) {
+                    console.error("Failed to restore session", e);
+                    localStorage.removeItem('adra_user_session');
+                }
+            }
+        };
+        restoreSession();
+    }, []);
+
+
+    // --- Save/Load Logic ---
+    const fetchSavedReports = async () => {
+        if (!currentUser) return;
+
+        let query = supabase.from('reports').select('*').order('aid').order('child_name');
+
+        // If NOT admin, only show my own reports
+        if (currentUser.role !== 'ADMIN') {
+            query = query.eq('created_by', currentUser.username);
+        }
+
+        const { data, error } = await query;
+        if (error) {
+            console.error("Error fetching reports", error);
+        } else {
+            setSavedReports(data || []);
+        }
+    };
+
+    // Fetch reports whenever we switch to the saved reports view
+    useEffect(() => {
+        if (view === 'SAVED_REPORTS') {
+            fetchSavedReports();
+        }
+    }, [view, currentUser]);
+
+    const handleSaveReport = async () => {
+        if (!currentUser) return;
+
+        const aid = reportType === 'APR' ? data.aidNo : cspData.aidNo;
+        const childName = reportType === 'APR' ? data.childName : cspData.childName;
+
+        if (!aid || !childName) {
+            alert("Please provide both AID No and Child Name before saving.");
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            // 1. Check for duplicates (same AID+Name+Type) EXCLUDING current ID if editing
+            let checkQuery = supabase
+                .from('reports')
+                .select('id')
+                .eq('aid', aid)
+                .eq('child_name', childName)
+                .eq('report_type', reportType);
+
+            if (currentReportId) {
+                checkQuery = checkQuery.neq('id', currentReportId);
+            }
+
+            const { data: duplicates } = await checkQuery;
+
+            if (duplicates && duplicates.length > 0) {
+                alert(`A ${reportType} report for ${aid} - ${childName} already exists! Please use a unique AID/Name combination.`);
+                setIsSaving(false);
+                return;
+            }
+
+            // 2. Prepare payload
+            const payload = {
+                created_by: currentUser.username,
+                report_type: reportType,
+                aid: aid,
+                child_name: childName,
+                report_data: reportType === 'APR' ? data : cspData,
+                updated_at: new Date().toISOString()
+            };
+
+            let error;
+            if (currentReportId) {
+                // Update existing
+                const result = await supabase.from('reports').update(payload).eq('id', currentReportId);
+                error = result.error;
+            } else {
+                // Create new
+                const result = await supabase.from('reports').insert(payload).select().single();
+                error = result.error;
+                if (result.data) setCurrentReportId(result.data.id);
+            }
+
+            if (error) throw error;
+
+            alert("Report saved successfully!");
+
+        } catch (err: any) {
+            console.error("Save error:", err);
+            alert("Failed to save: " + err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleLoadReport = (report: SavedReport) => {
+        // 1. Set Type
+        setReportType(report.report_type);
+
+        // 2. Set Data
+        if (report.report_type === 'APR') {
+            setData(report.report_data as DossierProfile);
+        } else {
+            setCspData(report.report_data as CaseHistoryProfile);
+        }
+
+        // 3. Set Context
+        setCurrentReportId(report.id);
+
+        // 4. Change View
+        setView('BUILDER');
+    };
+
+    const handleDeleteReport = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this report? This cannot be undone.")) return;
+
+        const { error } = await supabase.from('reports').delete().eq('id', id);
+        if (error) {
+            alert("Failed to delete");
+        } else {
+            fetchSavedReports(); // Refresh list
+        }
+    };
+
+    const startNewReport = () => {
+        setCurrentReportId(null);
+        setData({
+            ...INITIAL_DOSSIER,
+            ...defaultValues,
+            preparedBy: currentUser?.name || '',
+            preparedDate: defaultValues.preparedDate || new Date().toLocaleDateString('en-GB').replace(/\//g, '.')
+        });
+        setCspData({
+            ...INITIAL_CASE_HISTORY,
+            schoolName: defaultValues.schoolName || INITIAL_CASE_HISTORY.schoolName,
+            donorAgency: defaultValues.donorAgency || INITIAL_CASE_HISTORY.donorAgency,
+            sponsorshipCategory: defaultValues.sponsorshipCategory || INITIAL_CASE_HISTORY.sponsorshipCategory,
+            preparedBy: currentUser?.name || '',
+            preparedDate: defaultValues.preparedDate || new Date().toLocaleDateString('en-GB').replace(/\//g, '.')
+        });
+        setView('BUILDER');
+    };
+
+
+    // --- Helper State Updates ---
     const handleSaveApiKey = (key: string) => {
         setUserApiKey(key);
         localStorage.setItem('adra_user_api_key', key);
@@ -115,6 +297,10 @@ export const App: React.FC = () => {
                 allowAI: data.allow_ai
             };
 
+            // --- SAVE SESSION (24 Hours) ---
+            const expiry = new Date().getTime() + (24 * 60 * 60 * 1000); // 1 Day
+            localStorage.setItem('adra_user_session', JSON.stringify({ user, expiry }));
+
             setCurrentUser(user);
             setupUserSession(user);
 
@@ -124,6 +310,7 @@ export const App: React.FC = () => {
     };
 
     const setupUserSession = (user: User) => {
+        // Initial setup for builder
         setData(prev => ({
             ...prev,
             ...defaultValues,
@@ -140,14 +327,18 @@ export const App: React.FC = () => {
             preparedDate: defaultValues.preparedDate || new Date().toLocaleDateString('en-GB').replace(/\//g, '.')
         }));
 
-        setView(user.role === 'ADMIN' ? 'DASHBOARD' : 'BUILDER');
+        // Default view based on role (Admin goes to Dashboard, User goes to Saved Reports list usually, or Builder)
+        // Let's default to SAVED_REPORTS for regular users so they see their work
+        setView(user.role === 'ADMIN' ? 'DASHBOARD' : 'SAVED_REPORTS');
     };
 
     const handleLogout = () => {
+        localStorage.removeItem('adra_user_session');
         setCurrentUser(null);
         setView('LOGIN');
         setData(INITIAL_DOSSIER);
         setCspData(INITIAL_CASE_HISTORY);
+        setCurrentReportId(null);
     };
 
     // --- Admin Save Handlers ---
@@ -173,7 +364,7 @@ export const App: React.FC = () => {
             password: user.password,
             name: user.name,
             role: user.role,
-            allow_ai: user.allowAI // Map back to snake_case
+            allow_ai: user.allowAI
         }, { onConflict: 'username' });
 
         if (!error) fetchAllSettings();
@@ -238,11 +429,105 @@ export const App: React.FC = () => {
         );
     }
 
+    // --- SAVED REPORTS LIST VIEW ---
+    if (view === 'SAVED_REPORTS') {
+        return (
+            <div className="min-h-screen bg-slate-50 py-6 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-[1200px] mx-auto">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-green-700 p-2 rounded-md text-white shadow-lg">
+                                <FolderOpen className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Saved Reports</h1>
+                                <p className="text-sm text-slate-500">
+                                    View and manage your saved dossiers.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={startNewReport} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium">
+                                <FileText className="w-4 h-4" /> Create New
+                            </button>
+                            {currentUser?.role === 'ADMIN' && (
+                                <button onClick={() => setView('DASHBOARD')} className="text-slate-600 hover:text-slate-900 px-3 py-2 text-sm font-medium">
+                                    Dashboard
+                                </button>
+                            )}
+                            <button onClick={handleLogout} className="text-red-600 hover:text-red-700 px-3 py-2 text-sm font-medium">
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-16">SL</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name (AID - Child Name)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-32">Type</th>
+                                    {currentUser?.role === 'ADMIN' && (
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created By</th>
+                                    )}
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Last Updated</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-slate-200">
+                                {savedReports.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={currentUser?.role === 'ADMIN' ? 6 : 5} className="px-6 py-12 text-center text-slate-500 text-sm">
+                                            No reports found. Click "Create New" to start.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    savedReports.map((report, index) => (
+                                        <tr key={report.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{index + 1}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                                                {report.aid} - {report.child_name}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${report.report_type === 'APR' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'}`}>
+                                                    {report.report_type === 'CASE_HISTORY' ? 'Case History' : 'APR'}
+                                                </span>
+                                            </td>
+                                            {currentUser?.role === 'ADMIN' && (
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                                    {userList.find(u => u.username === report.created_by)?.name || report.created_by}
+                                                </td>
+                                            )}
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                                {new Date(report.updated_at).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <div className="flex justify-end gap-3">
+                                                    <button onClick={() => handleLoadReport(report)} className="text-green-600 hover:text-green-900 flex items-center gap-1">
+                                                        <Pencil className="w-4 h-4" /> Edit
+                                                    </button>
+                                                    <button onClick={() => handleDeleteReport(report.id)} className="text-red-600 hover:text-red-900 flex items-center gap-1">
+                                                        <Trash2 className="w-4 h-4" /> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // --- BUILDER VIEW ---
     return (
         <div className="min-h-screen bg-slate-50 py-6 px-4 sm:px-6 lg:px-8 relative">
 
-            {/* API Key Modal (RESTORED) */}
+            {/* API Key Modal */}
             {showApiKeyModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
                     <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md mx-4 animate-in fade-in zoom-in duration-200">
@@ -288,12 +573,12 @@ export const App: React.FC = () => {
             )}
 
             {/* Loading Overlay */}
-            {isGenerating && (
+            {(isGenerating || isSaving) && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
                     <div className="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center animate-in fade-in zoom-in duration-200 max-w-sm w-full mx-4">
                         <Loader2 className="w-12 h-12 text-green-600 animate-spin mb-4" />
-                        <h3 className="text-lg font-bold text-slate-900">Generating Report</h3>
-                        <p className="text-slate-500 text-sm mt-2 text-center">Fetching assets and compiling your document. This may take a moment...</p>
+                        <h3 className="text-lg font-bold text-slate-900">{isSaving ? 'Saving to Database...' : 'Generating Report...'}</h3>
+                        <p className="text-slate-500 text-sm mt-2 text-center">Please wait while we process your request.</p>
                     </div>
                 </div>
             )}
@@ -308,36 +593,50 @@ export const App: React.FC = () => {
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">ADRA Report Builder</h1>
                         <p className="text-sm text-slate-500">
                             Logged in as <span className="font-semibold">{currentUser?.name || currentUser?.username}</span>
+                            {currentReportId && <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">Editing Mode</span>}
                         </p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <button onClick={() => setView('SAVED_REPORTS')} className="text-slate-600 hover:text-slate-900 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1">
+                        <FolderOpen className="w-4 h-4" /> My Reports
+                    </button>
+
                     {currentUser?.role === 'ADMIN' && (
                         <button onClick={() => setView('DASHBOARD')} className="text-slate-600 hover:text-slate-900 px-3 py-2 text-sm font-medium transition-colors">
                             Dashboard
                         </button>
                     )}
 
-                    {/* Restored API Key Button */}
                     <button
                         onClick={() => setShowApiKeyModal(true)}
                         className={`flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors border rounded ${userApiKey ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 animate-pulse'}`}
                     >
                         <Key className="w-4 h-4" />
-                        {userApiKey ? 'API Key Set' : 'Set API Key'}
+                        {userApiKey ? 'Key Set' : 'Set Key'}
                     </button>
 
                     <button onClick={handleLogout} className="text-red-600 hover:text-red-700 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1">
-                        <LogOut className="w-4 h-4" /> Logout
+                        <LogOut className="w-4 h-4" />
                     </button>
+
+                    <button
+                        onClick={handleSaveReport}
+                        disabled={isSaving}
+                        className={`flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded shadow-sm transition-all font-medium text-sm ${isSaving ? 'opacity-70 cursor-wait' : ''}`}
+                    >
+                        <Save className="w-4 h-4" />
+                        Save
+                    </button>
+
                     <button
                         onClick={handleExport}
                         disabled={isGenerating}
                         className={`flex items-center justify-center gap-2 bg-green-700 hover:bg-green-800 text-white px-5 py-2.5 rounded shadow-sm transition-all font-medium text-sm ${isGenerating ? 'opacity-70 cursor-wait' : ''}`}
                     >
                         <FileDown className="w-4 h-4" />
-                        {isGenerating ? 'Exporting...' : 'Export Report'}
+                        Export
                     </button>
                 </div>
             </div>
@@ -642,7 +941,7 @@ export const App: React.FC = () => {
                                                 <p><strong>Income (BDT):</strong> {data.monthlyIncome}</p>
                                             </div>
                                             <div className="w-[20%]">
-                                                <div className="border border-black h-40 w-full flex items-center justify-center text-[8px] text-gray-400">
+                                                <div className="border border-black h-48 w-full flex items-center justify-center text-[8px] text-gray-400">
                                                     Picture
                                                 </div>
                                                 <p className="text-center mt-1 text-[8px] font-bold">Profile Picture</p>
@@ -667,7 +966,7 @@ export const App: React.FC = () => {
                                         <div className="flex gap-2 mb-6">
 
                                             {/* Left column */}
-                                            <div className="w-[80%] space-y-1">
+                                            <div className="w-[70%] space-y-1">
 
                                                 <div className="flex justify-between gap-2">
                                                     <span><strong>Code / Aid No:</strong> {cspData.aidNo}</span>
@@ -698,7 +997,7 @@ export const App: React.FC = () => {
                                                 <p><strong>Mother's Name:</strong> {cspData.mothersName}</p>
                                                 <p><strong>Literacy of Father:</strong> {cspData.fatherLiteracy}</p>
                                                 <p><strong>Literacy of Mother:</strong> {cspData.motherLiteracy}</p>
-                                                <p><strong>Siblings:</strong> S- {cspData.siblingsSisters || '0'}, B- {cspData.siblingsBrothers || '0'}</p>
+                                                <p><strong>Siblings:</strong> S- {cspData.siblingsSisters || '_'}, B- {cspData.siblingsBrothers || '_'}</p>
 
                                                 <div className="flex justify-between gap-2 mt-2">
                                                     <span><strong>Family Income Source:</strong> {cspData.familyIncomeSource}</span>
@@ -707,8 +1006,8 @@ export const App: React.FC = () => {
                                             </div>
 
                                             {/* Right column */}
-                                            <div className="w-[20%]">
-                                                <div className="border border-black h-40 w-full flex items-center justify-center text-[8px] text-gray-400">
+                                            <div className="w-[30%]">
+                                                <div className="border border-black h-48 w-full flex items-center justify-center text-[8px] text-gray-400">
                                                     Picture
                                                 </div>
                                                 <p className="text-center mt-1 text-[8px] font-bold">Profile Picture</p>
