@@ -11,8 +11,8 @@ interface DossierInputProps {
   type?: 'text' | 'textarea';
   placeholder?: string;
   enableAI?: boolean;
-  aiConfig?: PromptSetting; 
-  context?: string; 
+  aiConfig?: PromptSetting;
+  context?: string;
   userCanEnhance?: boolean;
   apiKey?: string; // Restored
 }
@@ -35,10 +35,10 @@ export const DossierInput: React.FC<DossierInputProps> = ({
   const handleEnhance = async () => {
     if (!value.trim()) return;
     if (!aiConfig) {
-        setError("AI Config missing");
-        return;
+      setError("AI Config missing");
+      return;
     }
-    
+
     setIsEnhancing(true);
     setError(null);
     try {
@@ -73,7 +73,7 @@ export const DossierInput: React.FC<DossierInputProps> = ({
           </button>
         )}
       </div>
-      
+
       <div className="relative">
         {type === 'textarea' ? (
           <textarea
@@ -92,10 +92,10 @@ export const DossierInput: React.FC<DossierInputProps> = ({
             placeholder={placeholder}
           />
         )}
-        
+
         {/* Visual cue for focus state or AI ready */}
         <div className="absolute right-2 bottom-2 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
-           <Wand2 className="w-4 h-4 text-slate-300" />
+          <Wand2 className="w-4 h-4 text-slate-300" />
         </div>
       </div>
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}

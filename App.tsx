@@ -285,7 +285,7 @@ export const App: React.FC = () => {
                 .single();
 
             if (error || !data) {
-                setLoginError('Invalid credentials');
+                setLoginError('Invalid credentials, try again.');
                 return;
             }
 
