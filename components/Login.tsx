@@ -112,7 +112,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
                 }
               );
             }}
-            onClick={() => window.open('https://onmoaw.vercel.app', '_blank')}
+            onClick={() => window.open('https://onmoeon.vercel.app', '_blank')}
             className="text-sm font-semibold mx-2 cursor-pointer transition-transform duration-300 hover:-translate-y-0.5 hover:scale-105 inline-block"
           >
             ONMOEON
@@ -123,7 +123,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
 
 
       <p className="mt-8 text-xs text-slate-400">
-        © {currentYear} {' '} v1.2.5
+        © {currentYear} {' '} v1.2.6
       </p>
 
 
